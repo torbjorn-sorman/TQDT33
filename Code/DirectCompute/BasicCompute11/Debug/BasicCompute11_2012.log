@@ -1,0 +1,14 @@
+﻿Build started 2015-06-24 13:56:08.
+     1>Project "C:\Users\torso\Documents\GitHub\TQDT33\Code\DirectCompute\BasicCompute11\BasicCompute11_2012.vcxproj" on node 2 (Build target(s)).
+     1>Link:
+         BasicCompute11_2012.vcxproj -> C:\Users\torso\Documents\GitHub\TQDT33\Code\DirectCompute\Debug\BasicCompute11.exe
+       CustomBuildStep:
+         copy /y "C:\Program Files (x86)\Windows Kits\8.1\redist\d3d\x86\D3DCompile*.DLL" "C:\Users\torso\Documents\GitHub\TQDT33\Code\DirectCompute\Debug\"
+         :VCEnd
+         C:\Program Files (x86)\Windows Kits\8.1\redist\d3d\x86\d3dcompiler_47.dll
+                 1 fil(er) kopierad(e).
+     1>Done Building Project "C:\Users\torso\Documents\GitHub\TQDT33\Code\DirectCompute\BasicCompute11\BasicCompute11_2012.vcxproj" (Build target(s)).
+
+Build succeeded.
+
+Time Elapsed 00:00:00.04

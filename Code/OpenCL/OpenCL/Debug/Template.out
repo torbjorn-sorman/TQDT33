@@ -1,0 +1,15 @@
+Setting target instruction set architecture to: Default (Advanced Vector Extension 2 (AVX2))
+OpenCL Intel CPU device was found!
+Device name: Intel(R) Core(TM) i5-4590 CPU @ 3.30GHz
+Device version: OpenCL 1.2 (Build 148)
+Device vendor: Intel(R) Corporation
+Device profile: FULL_PROFILE
+Compilation started
+Compilation done
+Linking started
+Linking done
+Device build started
+Device build done
+Kernel <Add> was successfully vectorized
+Done.
+Build succeeded!
