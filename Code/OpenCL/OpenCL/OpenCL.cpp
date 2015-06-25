@@ -32,7 +32,6 @@
 //for perf. counters
 #include <Windows.h>
 
-
 // Macros for OpenCL versions
 #define OPENCL_VERSION_1_2  1.2f
 #define OPENCL_VERSION_2_0  2.0f
@@ -247,7 +246,6 @@ ocl_args_d_t::~ocl_args_d_t()
      */
 }
 
-
 /*
  * Check whether an OpenCL platform is the required platform
  * (based on the platform's name)
@@ -363,7 +361,6 @@ cl_platform_id FindOpenCLPlatform(const char* preferredPlatform, cl_device_type 
     return NULL;
 }
 
-
 /*
  * This function read the OpenCL platdorm and device versions
  * (using clGetxxxInfo API) and stores it in the ocl structure.
@@ -454,7 +451,6 @@ int GetPlatformAndDeviceVersion(cl_platform_id platformId, ocl_args_d_t *ocl)
     return err;
 }
 
-
 /*
  * Generate random value for input buffers
  */
@@ -469,7 +465,6 @@ void generateInput(cl_int* inputArray, cl_uint arrayWidth, cl_uint arrayHeight)
         inputArray[i] = rand();
     }
 }
-
 
 /*
  * This function picks/creates necessary OpenCL objects which are needed.
@@ -549,7 +544,6 @@ int SetupOpenCL(ocl_args_d_t *ocl, cl_device_type deviceType)
 
     return CL_SUCCESS;
 }
-
 
 /*
  * Create and build OpenCL program from its source code
@@ -781,7 +775,6 @@ int _tmain(int argc, TCHAR* argv[])
     cl_int err;
     ocl_args_d_t ocl;
     cl_device_type deviceType = CL_DEVICE_TYPE_GPU;
-    //cl_device_type deviceType = CL_DEVICE_TYPE_CPU;
 
     LARGE_INTEGER perfFrequency;
     LARGE_INTEGER performanceCountNDRangeStart;
@@ -884,4 +877,3 @@ int _tmain(int argc, TCHAR* argv[])
 
     return 0;
 }
-
