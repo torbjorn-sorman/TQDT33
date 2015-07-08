@@ -1,22 +1,27 @@
 
+#define FREEGLUT_LIB_PRAGMAS 0
+
 #include <stdio.h>
 #include <stdlib.h>
-#include <iostream>
-#include <Windows.h>
-#include <GL/glew.h>
-#include <GL/GL.h>
-#include <GL/GLU.h>
 
+#include <GL/glew.h>
+#include <GL/freeglut.h>
+
+#include <iostream>
 
 int main(int argc, char **argv)
 {
-    
-    GLuint shader = glCreateShader(GL_COMPUTE_SHADER);
-    GLchar *str = "";
-    glShaderSource(shader, 1, &str, NULL);
- 
 
-    printf("Press any key...");
+    glutInit(&argc, argv);
+    glutInitDisplayMode(GLUT_DEPTH | GLUT_DOUBLE | GLUT_RGBA);
+    glutInitWindowPosition(500, 500);//optional
+    glutInitWindowSize(800, 600); //optional
+    glutCreateWindow("OpenGL First Window");
+
     getchar();
+
+    glutMainLoop();
+
+    
     return 0;
 }
