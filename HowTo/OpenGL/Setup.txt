@@ -1,6 +1,7 @@
 freeglut & glew on Win & Visual Studio:
 
 	Download
+	Follow Read Me!
 	Add content in /bin to global path
 	Add folders /include & /lib to project
 	Properties
