@@ -3,7 +3,7 @@
 #include <math.h>
 
 #define M_2_PI 6.28318530718
-#define N 1024 // 73 times -> ~180
+#define N 8192 // 73 times -> ~180
 
 typedef __int32 int32_t;
 typedef unsigned __int32 uint32_t;
@@ -49,6 +49,14 @@ struct complex
     }
 };
 
+const int tab32[32] = { 0, 9, 1, 10, 13, 21, 2, 29, 11, 14, 16, 18, 22, 25, 3, 30, 8, 12, 20, 28, 15, 17, 24, 7, 19, 27, 23, 6, 26, 5, 4, 31 };
+
+int log2_32(uint32_t value)
+{
+    value |= value >> 1; value |= value >> 2; value |= value >> 4; value |= value >> 8; value |= value >> 16;
+    return tab32[(uint32_t)(value * 0x07C4ACDD) >> 27];
+}
+
 uint32_t reverse(uint32_t x, uint32_t l)
 {
     x = (((x & 0xaaaaaaaa) >> 1) | ((x & 0x55555555) << 1));
@@ -58,10 +66,6 @@ uint32_t reverse(uint32_t x, uint32_t l)
     return((x >> 16) | (x << 16)) >> (32 - l);
 }
 
-complex complex_pow(complex c, uint32_t p);
-complex pow_complex(complex c, uint32_t p);
-const int tab32[32] = { 0, 9, 1, 10, 13, 21, 2, 29, 11, 14, 16, 18, 22, 25, 3, 30, 8, 12, 20, 28, 15, 17, 24, 7, 19, 27, 23, 6, 26, 5, 4, 31 };
-int log2_32(uint32_t value);
 void naive_dft(complex *x, complex *X);
 void fft(complex *x, complex *X);
 void printTime(LARGE_INTEGER tStart, LARGE_INTEGER tStop, LARGE_INTEGER freq);
@@ -89,18 +93,6 @@ int main()
     }
     impulse[1].r = 1.0;
 
-    // TEST nk % N
-    for (int n = 0; n < N; ++n)
-    {
-        //printf("\n");
-        for (int k = 0; k < log2_32(N); ++k)
-        {
-            //printf("%d\t", ((n * k) % N));
-        }
-        //printf("\n");
-    }
-    //getchar();
-    //return 0;
     /* FFT */
     printf("\nWarm up FFT...\n");
     fft(impulse, res_FFT);
@@ -158,14 +150,6 @@ void naive_dft(complex *x, complex *X)
 }
 
 /* Fast Fourier Transform */
-/*
-3.
-In the l-th array, node k (in binary form k[y-1], ..., k1, k0) has a solid line drawn to it from a node in the (l - 1)th array.
-The address of the node in the (l - 1)th array is the same as node k, except that bit k[y l] must be a one.
-
-The dashed line comes from a node in the (l - 1)th array whose address is the same, but bit k[y l] must be a zero.
-*/
-
 void fft(complex *x, complex *X)
 {
     complex tmp[N];
@@ -200,8 +184,10 @@ void fft(complex *x, complex *X)
             p = (((p & 0xf0f0f0f0) >> 4) | ((p & 0x0f0f0f0f) << 4));
             p = (((p & 0xff00ff00) >> 8) | ((p & 0x00ff00ff) << 8));            
             theta = w_angle * (((p >> 16) | (p << 16)) >> (32 - depth));
+            
             x_re = cos(theta);
             x_im = sin(theta);
+            
             l_re = tmp[l].r + x_re * tmp[u].r + x_im * tmp[u].i;
             l_im = tmp[l].i + x_re * tmp[u].i + x_im * tmp[u].r;
             // Upper
@@ -211,8 +197,10 @@ void fft(complex *x, complex *X)
             p = (((p & 0xf0f0f0f0) >> 4) | ((p & 0x0f0f0f0f) << 4));
             p = (((p & 0xff00ff00) >> 8) | ((p & 0x00ff00ff) << 8));
             theta = w_angle * (((p >> 16) | (p << 16)) >> (32 - depth));
+
             x_re = cos(theta);
             x_im = sin(theta);
+
             u_re = tmp[l].r + x_re * tmp[u].r + x_im * tmp[u].i;
             u_im = tmp[l].i + x_re * tmp[u].i + x_im * tmp[u].r;
             // Insert
@@ -252,26 +240,6 @@ int verify_impulse(complex *c, int size)
         if (abs(sqrt(c[i].r * c[i].r + c[i].i * c[i].i) - 1.0) > 0.000001)
             return 0;
     return 1;
-}
-
-int log2_32(uint32_t value)
-{
-    value |= value >> 1; value |= value >> 2; value |= value >> 4; value |= value >> 8; value |= value >> 16;
-    return tab32[(uint32_t)(value * 0x07C4ACDD) >> 27];
-}
-
-complex complex_pow(double a, uint32_t p)
-{
-    double theta = a * p;
-    return{ cos(theta), sin(theta) };
-}
-
-complex pow_complex(complex c, uint32_t p)
-{
-    complex a = c;
-    for (uint32_t i = 1; i < p; ++i)
-        a = a * c;
-    return a;
 }
 
 void compareComplex(complex *c1, complex *c2, double t1, double t2)
