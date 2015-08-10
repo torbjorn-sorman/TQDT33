@@ -5,7 +5,7 @@
 #include "kiss_fft.h"
 
 #define M_2_PI 6.28318530718
-#define N 8192
+#define N 8192 // 8192, 65536, 1048576, 16777216
 
 typedef __int32 int32_t;
 typedef unsigned __int32 uint32_t;
@@ -62,6 +62,9 @@ uint32_t reverse(uint32_t x, uint32_t l)
 #define C_MUL_RE(A,B) A.r * B.r + A.i * B.i
 #define C_MUL_IM(A,B) A.r * B.i + A.i * B.r
 
+#define C_MUL(R,A,B) R.r = A.r * B.r + A.i * B.i; R.i = A.r * B.i + A.i * B.r
+#define C_MUL_ADD(R,A,B,C) R.r = C.r + A.r * B.r + A.i * B.i; R.i = C.i + A.r * B.i + A.i * B.r
+
 // Slightly faster... but only by small margin.
 uint32_t revTbl32(uint32_t v, uint32_t l)
 {
@@ -88,6 +91,7 @@ int main()
     complex *impulse = (complex *)malloc(sizeof(complex)*N);
     complex *res_FFT = (complex *)malloc(sizeof(complex)*N);
     complex *cx_out = (complex *)malloc(sizeof(complex)*N);
+    float *sintest = (float *)malloc(sizeof(float)*N);
 	for (int i = 0; i < N; ++i)
 	{
 		impulse[i].r = 0.f;
@@ -166,24 +170,16 @@ void fft(complex *x, complex *X)
     uint32_t trail = 32 - depth;
 	uint32_t bit = 0;
 	float u_re, u_im, l_re, l_im;
+    complex tmp_u, tmp_l;
 	uint32_t u, l, p;
 	uint32_t dist, dist_2, offset;
 	for (uint32_t n = 0; n < N; ++n)
-	{
-		tmp[n] = x[n];
-        /*
-        p = n;
-        p = (((p & 0xaaaaaaaa) >> 1) | ((p & 0x55555555) << 1));
-        p = (((p & 0xcccccccc) >> 2) | ((p & 0x33333333) << 2));
-        p = (((p & 0xf0f0f0f0) >> 4) | ((p & 0x0f0f0f0f) << 4));
-        p = (((p & 0xff00ff00) >> 8) | ((p & 0x00ff00ff) << 8));
-        theta = w_angle * (((p >> 16) | (p << 16)) >> trail);
-        */
+    {
+        tmp[n] = x[n];
         theta = w_angle * (rev(n, trail));
-		W[n].r = cos(theta);
-		W[n].i = sin(theta);
+        W[n].r = cos(theta);
+        W[n].i = sin(theta);
 	}
-
 	dist = N;
 	for (uint32_t k = 0; k < depth; ++k)
 	{
@@ -191,22 +187,19 @@ void fft(complex *x, complex *X)
 		dist_2 = dist;
 		dist = dist >> 1;
 		offset = 0;
-		for (uint32_t n = 0; n < n_half; ++n)
+        for (uint32_t n = 0; n < n_half; ++n)
 		{
 			offset += (n >= (dist + offset)) * dist_2;
 			l = (n & ~(1 << bit)) + offset;
 			u = l + dist;
 			// Lower			
             p = (l >> bit);
-            l_re = tmp[l].r;
-            l_im = tmp[l].i;
-            tmp[l].r = l_re + C_MUL_RE(W[p], tmp[u]);
-            tmp[l].i = l_im + C_MUL_IM(W[p], tmp[u]);
+            tmp_l = tmp[l];
+            C_MUL_ADD(tmp[l], W[p], tmp[u], tmp_l);
 			// Upper
             p = (u >> bit);
-            u_re = l_re + C_MUL_RE(W[p], tmp[u]);
-            tmp[u].i = l_im + C_MUL_IM(W[p], tmp[u]);
-            tmp[u].r = u_re;
+            tmp_u = tmp[u];
+            C_MUL_ADD(tmp[u], W[p], tmp_u, tmp_l);            
 		}
 	}
 	for (int n = 0; n < N; ++n)
