@@ -5,7 +5,7 @@
 #include "kiss_fft.h"
 
 #define M_2_PI 6.28318530718
-#define N 8192 // 73 times -> ~180
+#define N 8192
 
 typedef __int32 int32_t;
 typedef unsigned __int32 uint32_t;
@@ -17,6 +17,7 @@ struct complex
 	float i;
 };
 */
+
 static const int tab32[32] = 
 { 
     0, 9, 1, 10, 13, 21, 2, 29, 11, 14, 16, 18, 22, 25, 3, 30, 8, 12, 20, 28, 15, 17, 24, 7, 19, 27, 23, 6, 26, 5, 4, 31 
@@ -56,6 +57,10 @@ uint32_t reverse(uint32_t x, uint32_t l)
     x = (((x & 0xff00ff00) >> 8) | ((x & 0x00ff00ff) << 8));
     return((x >> 16) | (x << 16)) >> (32 - l);
 }
+
+#define rev(X,L) ((revTbl256[X & 0xff] << 24) | (revTbl256[(X >> 8) & 0xff] << 16) | (revTbl256[(X >> 16) & 0xff] << 8) | (revTbl256[(X >> 24) & 0xff])) >> L
+#define C_MUL_RE(A,B) A.r * B.r + A.i * B.i
+#define C_MUL_IM(A,B) A.r * B.i + A.i * B.r
 
 // Slightly faster... but only by small margin.
 uint32_t revTbl32(uint32_t v, uint32_t l)
@@ -158,19 +163,23 @@ void fft(complex *x, complex *X)
 	const uint32_t n_half = N / 2;
 	float w_angle = -M_2_PI / N;
 	float theta;
+    uint32_t trail = 32 - depth;
 	uint32_t bit = 0;
 	float u_re, u_im, l_re, l_im;
 	uint32_t u, l, p;
 	uint32_t dist, dist_2, offset;
 	for (uint32_t n = 0; n < N; ++n)
 	{
-		tmp[n] = x[n];        
+		tmp[n] = x[n];
+        /*
         p = n;
-		p = (((p & 0xaaaaaaaa) >> 1) | ((p & 0x55555555) << 1));
-		p = (((p & 0xcccccccc) >> 2) | ((p & 0x33333333) << 2));
-		p = (((p & 0xf0f0f0f0) >> 4) | ((p & 0x0f0f0f0f) << 4));
-		p = (((p & 0xff00ff00) >> 8) | ((p & 0x00ff00ff) << 8));        
-		theta = w_angle * (((p >> 16) | (p << 16)) >> (32 - depth));
+        p = (((p & 0xaaaaaaaa) >> 1) | ((p & 0x55555555) << 1));
+        p = (((p & 0xcccccccc) >> 2) | ((p & 0x33333333) << 2));
+        p = (((p & 0xf0f0f0f0) >> 4) | ((p & 0x0f0f0f0f) << 4));
+        p = (((p & 0xff00ff00) >> 8) | ((p & 0x00ff00ff) << 8));
+        theta = w_angle * (((p >> 16) | (p << 16)) >> trail);
+        */
+        theta = w_angle * (rev(n, trail));
 		W[n].r = cos(theta);
 		W[n].i = sin(theta);
 	}
@@ -188,23 +197,21 @@ void fft(complex *x, complex *X)
 			l = (n & ~(1 << bit)) + offset;
 			u = l + dist;
 			// Lower			
-			p = (l >> bit);
-			l_re = tmp[l].r + W[p].r * tmp[u].r + W[p].i * tmp[u].i;
-			l_im = tmp[l].i + W[p].r * tmp[u].i + W[p].i * tmp[u].r;
+            p = (l >> bit);
+            l_re = tmp[l].r;
+            l_im = tmp[l].i;
+            tmp[l].r = l_re + C_MUL_RE(W[p], tmp[u]);
+            tmp[l].i = l_im + C_MUL_IM(W[p], tmp[u]);
 			// Upper
-			p = (u >> bit);
-			u_re = tmp[l].r + W[p].r * tmp[u].r + W[p].i * tmp[u].i;
-			u_im = tmp[l].i + W[p].r * tmp[u].i + W[p].i * tmp[u].r;
-			// Insert
-			tmp[l].r = l_re;
-			tmp[l].i = l_im;
-			tmp[u].r = u_re;
-			tmp[u].i = u_im;
+            p = (u >> bit);
+            u_re = l_re + C_MUL_RE(W[p], tmp[u]);
+            tmp[u].i = l_im + C_MUL_IM(W[p], tmp[u]);
+            tmp[u].r = u_re;
 		}
 	}
 	for (int n = 0; n < N; ++n)
 	{
-		X[n] = tmp[reverse(n, depth)];
+		X[n] = tmp[rev(n, trail)];
 	}
 	free(tmp);
 	free(W);
