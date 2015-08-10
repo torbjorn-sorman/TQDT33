@@ -99,18 +99,19 @@ int main()
     printTime(tStart, tStop, freq);
     time_FFT = (float)(tStop.QuadPart - tStart.QuadPart) * 1000.0 / (float)freq.QuadPart;
 
-    /* KissFFT for comparissons*/
+    /* KissFFT for comparissons */
     printf("Running KISS_FFT...\n");
-    kiss_fft_cfg cfg = kiss_fft_alloc(N, 0, 0, 0);
-    kiss_fft(cfg, impulse, cx_out);
+    kiss_fft_cfg cfgW = kiss_fft_alloc(N, 0, 0, 0);
+    kiss_fft(cfgW, impulse, cx_out);
     QueryPerformanceCounter(&tStart);
+    kiss_fft_cfg cfg = kiss_fft_alloc(N, 0, 0, 0);
     kiss_fft(cfg, impulse, cx_out);
     QueryPerformanceCounter(&tStop);
     printTime(tStart, tStop, freq);
     time_KFFT = (float)(tStop.QuadPart - tStart.QuadPart) * 1000.0 / (float)freq.QuadPart;
-
-	
+    	
 	//printResult(res_FFT, N, "impulse", verify_impulse(res_FFT, N));
+    //printResult(cx_out, N, "impulse", verify_impulse(cx_out, N));
 	compareComplex(res_FFT, cx_out, time_FFT, time_KFFT);
 	
     free(cfg);
@@ -148,7 +149,7 @@ void naive_dft(complex *x, complex *X)
 	}
 }
 
-/* Fast Fourier Transform */
+/* Naive Fast Fourier Transform */
 void fft(complex *x, complex *X)
 {
     complex *tmp = (complex *)malloc(sizeof(complex)*N);
@@ -170,8 +171,6 @@ void fft(complex *x, complex *X)
 		p = (((p & 0xf0f0f0f0) >> 4) | ((p & 0x0f0f0f0f) << 4));
 		p = (((p & 0xff00ff00) >> 8) | ((p & 0x00ff00ff) << 8));        
 		theta = w_angle * (((p >> 16) | (p << 16)) >> (32 - depth));
-        // Probably not worth it on GPU, only slightly faster on CPU big seq: 7807 vs 7724 ms
-        //theta = w_angle * (((revTbl256[n & 0xff] << 24) | (revTbl256[(n >> 8) & 0xff] << 16) | (revTbl256[(n >> 16) & 0xff] << 8) | (revTbl256[(n >> 24) & 0xff])) >> (32 - depth));
 		W[n].r = cos(theta);
 		W[n].i = sin(theta);
 	}
@@ -227,26 +226,17 @@ void printResult(complex *c, int n, char *str, int verified)
 	printf("\n%s\n", verified ? "Successful" : "Error");
 }
 
-/* Quick debugging on samples */
-/* The result should have constant magnitude in the transform domain. */
-int verify_impulse(complex *c, int size)
-{
-	for (int i = 0; i < size; ++i)
-		if (abs(sqrt(c[i].r * c[i].r + c[i].i * c[i].i) - 1.0) > 0.000001)
-			return 0;
-	return 1;
-}
-
 void compareComplex(complex *c1, complex *c2, float t1, float t2)
 {
 	int res = 0;
+    double m = 0.00001;
 	for (int i = 0; i < N; ++i)
 	{
-		if (c1[i].r != c2[i].r || c1[i].i != c2[i].i)
+        if ((abs(c1[i].r - c2[i].r) > m) || (abs(c1[i].i - c2[i].i) > m))
 		{
 			res = 1;
 			break;
 		}
 	}
-	printf("\n%s\n", res ? "EQUAL" : "NOT EQUAL");
+	printf("\n%s\n", res != 1 ? "EQUAL" : "NOT EQUAL");
 }
