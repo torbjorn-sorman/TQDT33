@@ -1,15 +1,17 @@
 #include <stdio.h>
 #include <Windows.h>
 #include <cmath>
+#include <limits>
 
 #include "kiss_fft.h"
 
 #define M_2_PI 6.28318530718
-#define N 8192 // 8192, 65536, 1048576, 16777216
+#define N 16777216 // 8192, 65536, 1048576, 16777216
 
 typedef __int32 int32_t;
 typedef unsigned __int32 uint32_t;
 typedef kiss_fft_cpx complex;
+
 /*
 struct complex
 {
@@ -49,7 +51,7 @@ int log2_32(uint32_t value)
 	return tab32[(uint32_t)(value * 0x07C4ACDD) >> 27];
 }
 
-uint32_t reverse(uint32_t x, uint32_t l)
+uint32_t reverseBitsLowMem(uint32_t x, uint32_t l)
 {
     x = (((x & 0xaaaaaaaa) >> 1) | ((x & 0x55555555) << 1));
     x = (((x & 0xcccccccc) >> 2) | ((x & 0x33333333) << 2));
@@ -58,18 +60,11 @@ uint32_t reverse(uint32_t x, uint32_t l)
     return((x >> 16) | (x << 16)) >> (32 - l);
 }
 
-#define rev(X,L) ((revTbl256[X & 0xff] << 24) | (revTbl256[(X >> 8) & 0xff] << 16) | (revTbl256[(X >> 16) & 0xff] << 8) | (revTbl256[(X >> 24) & 0xff])) >> L
-#define C_MUL_RE(A,B) A.r * B.r + A.i * B.i
-#define C_MUL_IM(A,B) A.r * B.i + A.i * B.r
-
+// This is only slightly faster on CPU, consider not using GPU?
+#define reverseBits(X,L) ((revTbl256[X & 0xff] << 24) | (revTbl256[(X >> 8) & 0xff] << 16) | (revTbl256[(X >> 16) & 0xff] << 8) | (revTbl256[(X >> 24) & 0xff])) >> L
 #define C_MUL(R,A,B) R.r = A.r * B.r + A.i * B.i; R.i = A.r * B.i + A.i * B.r
 #define C_MUL_ADD(R,A,B,C) R.r = C.r + A.r * B.r + A.i * B.i; R.i = C.i + A.r * B.i + A.i * B.r
-
-// Slightly faster... but only by small margin.
-uint32_t revTbl32(uint32_t v, uint32_t l)
-{
-    return ((revTbl256[v & 0xff] << 24) | (revTbl256[(v >> 8) & 0xff] << 16) | (revTbl256[(v >> 16) & 0xff] << 8) | (revTbl256[(v >> 24) & 0xff])) >> (32 - l);
-}
+#define C_ABS(A) sqrt(A.r * A.r + A.i * A.i)
 
 void naive_dft(complex *x, complex *X);
 void fft(complex *x, complex *X);
@@ -169,17 +164,19 @@ void fft(complex *x, complex *X)
 	float theta;
     uint32_t trail = 32 - depth;
 	uint32_t bit = 0;
-	float u_re, u_im, l_re, l_im;
     complex tmp_u, tmp_l;
 	uint32_t u, l, p;
 	uint32_t dist, dist_2, offset;
+    
+    // This loop is approxamently 1/3 of total time... (5838 - 3755) / 5838
 	for (uint32_t n = 0; n < N; ++n)
     {
         tmp[n] = x[n];
-        theta = w_angle * (rev(n, trail));
+        theta = w_angle * (reverseBits(n, trail));
         W[n].r = cos(theta);
         W[n].i = sin(theta);
 	}
+        
 	dist = N;
 	for (uint32_t k = 0; k < depth; ++k)
 	{
@@ -204,7 +201,7 @@ void fft(complex *x, complex *X)
 	}
 	for (int n = 0; n < N; ++n)
 	{
-		X[n] = tmp[rev(n, trail)];
+		X[n] = tmp[reverseBits(n, trail)];
 	}
 	free(tmp);
 	free(W);
@@ -228,15 +225,14 @@ void printResult(complex *c, int n, char *str, int verified)
 
 void compareComplex(complex *c1, complex *c2, float t1, float t2)
 {
-	int res = 0;
     double m = 0.00001;
+    double max_r = -DBL_MAX;
+    double max_i = -DBL_MAX;
 	for (int i = 0; i < N; ++i)
 	{
-        if ((abs(c1[i].r - c2[i].r) > m) || (abs(c1[i].i - c2[i].i) > m))
-		{
-			res = 1;
-			break;
-		}
+        max_r = max(abs((double)c1[i].r - (double)c2[i].r), max_r);
+        max_i = max(abs((double)c1[i].i - (double)c2[i].i), max_i);
 	}
-	printf("\n%s\n", res != 1 ? "EQUAL" : "NOT EQUAL");
+    printf("\nDiff: (%f, %f)\n", max_r, max_i);
+    printf("\n%s\n", (max_r > m || max_i > m) ? "NOT EQUAL" : "EQUAL");
 }
