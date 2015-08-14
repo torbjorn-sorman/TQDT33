@@ -6,7 +6,7 @@
 #include "kiss_fft.h"
 
 #define M_2_PI 6.28318530718
-#define N 16 // 8192, 65536, 1048576, 16777216
+#define N 8 // 8192, 65536, 1048576, 16777216
 
 typedef __int32 int32_t;
 typedef unsigned __int32 uint32_t;
@@ -48,6 +48,8 @@ int log2_32(uint32_t value);
 void naive_dft(my_complex *x, my_complex *X);
 void fft(my_complex *x, my_complex *X);
 void fft_ref(my_complex *in, my_complex *out);
+void fft_ref2(my_complex *x, my_complex *X);
+short FFT(short int dir, long m, float *x, float *y);
 void printTime(LARGE_INTEGER tStart, LARGE_INTEGER tStop, LARGE_INTEGER freq);
 void printResult(my_complex *c, int n, char *str, int verified);
 int verify_in(my_complex *c, int size);
@@ -56,28 +58,44 @@ void test_p();
 double run_test(void(*fn)(my_complex*, my_complex*), my_complex *in, my_complex *out);
 
 int main()
-{    
-    double time, time_ref;    
+{
+    double time, time_ref;
     my_complex *in = (my_complex *)malloc(sizeof(my_complex) * N);
     my_complex *out = (my_complex *)malloc(sizeof(my_complex) * N);
-    my_complex *out_ref = (my_complex *)malloc(sizeof(my_complex) * N);    
+    my_complex *out_ref = (my_complex *)malloc(sizeof(my_complex) * N);
+    my_complex *out_ref2 = (my_complex *)malloc(sizeof(my_complex) * N);
+    if (! in)
+        printf("Failed on in\n");
+    if (!out)
+        printf("Failed on out\n");
+    if (!out_ref)
+        printf("Failed on out1\n");
+    if (!out_ref2)
+        printf("Failed on out2\n");
+
     for (int i = 0; i < N; ++i)
     {
         in[i].r = in[i].i = 0.f;
     }
     in[1].r = 1.f;
-        
+
     printf("\nRunning FFT...\n");
-    printf("Time:\t", time = run_test(fft, in, out));
+    printf("Time: %f\t", time = run_test(fft, in, out));
+
+    printf("\nRunning REF FFT...\n");
+    printf("Time: %f\t", time_ref = run_test(fft_ref2, in, out_ref2));
 
     printf("\nRunning KISS FFT...\n");
-    printf("Time:\t", time_ref = run_test(fft_ref, in, out_ref));
+    printf("Time: %f\t", time_ref = run_test(fft_ref, in, out_ref));
 
     printResult(out, N, "in", 1);
     printResult(out_ref, N, "in", 1);
+    printResult(out_ref2, N, "in", 1);
+    compareComplex(out, out_ref2);
+    compareComplex(out, out_ref);
     compareComplex(out, out_ref);
     printf("Quota: %f\t(lower is faster)", (time / time_ref));
-        
+
     free(in);
     free(out);
 
@@ -92,83 +110,52 @@ void fft_ref(my_complex *in, my_complex *out)
     free(cfg);
 }
 
+void fft_ref2(my_complex *in, my_complex *out)
+{
+    float *x = (float *)malloc(sizeof(float) * N);
+    float *y = (float *)malloc(sizeof(float) * N);
+    for (int i = 0; i < N; ++i)
+    {
+        x[i] = in[i].r;
+        y[i] = in[i].i;
+    }
+    FFT(1, log2_32(N), x, y);
+    for (int i = 0; i < N; ++i)
+    {
+        out[i].r = x[i];
+        out[i].i = y[i];
+    }
+    free(x);
+    free(y);
+}
+
 /* Naive Fast Fourier Transform */
 void fft(my_complex *x, my_complex *X)
 {
-    my_complex *tmp = (my_complex *)malloc(sizeof(my_complex)*N);
-    my_complex *W = (my_complex *)malloc(sizeof(my_complex) * (N + 1));
-    uint32_t *ind = (uint32_t *)malloc(sizeof(uint32_t) * (N + 1));
     const uint32_t depth = log2_32(N);
     const uint32_t n2 = (N / 2);
-    const uint32_t n4 = (N / 4);
-    float w_angle = -(M_2_PI / N);
-    float ang, val;
-    uint32_t trail = 32 - depth;
-    uint32_t bit = 0;
+    my_complex *W = (my_complex *)malloc(sizeof(my_complex) * N);
+    my_complex *tmp = (my_complex *)malloc(sizeof(my_complex) * N);
+    if (tmp == NULL)
+        printf("tmp is null\n");
+    if (X == NULL)
+        printf("X is null\n");
     my_complex tmp_u, tmp_l;
-    uint32_t u, l, p;
-    uint32_t dist, dist_2, offset;
+    uint32_t trail, bit, u, l, p, dist, dist_2, offset;
+    float ang, w_angle;
 
-
-    // This loop is approxamently 1/3 of total time... (5838 - 3755) / 5838
+    w_angle = -(M_2_PI / N);
+    trail = 32 - depth;
+    bit = 0;
     for (uint32_t n = 0; n < N; ++n)
     {
         tmp[n] = x[n];
     }
-    /*
-    for (uint32_t n = 0; n < N; ++n)
+    for (uint32_t n = 0; n <= N; ++n)
     {
-        if (n % n4 == 0)
-            printf("\n");
         ang = w_angle * n;
-        printf("n(%u):\t%f\t%f\n", n, cos(ang), sin(ang));
+        C_SINCOS(W[n], ang);
     }
-    
-    for (uint32_t pn = 0; pn < N; ++pn)
-    {
-    p = pn % n2;
-    u_n2 = (pn >= n2);
-    p_sn4 = (p - n4);
-    cx = p - (p >= n4) * p_sn4 * 2;
-    cy = n4 - cx;
-    scos = u_n2 * p_sn4 + (pn < n2) * (n4 - p);
-    scos = 1 - (scos < 0) * 2;
-    ssin = -1 + u_n2 * 2;
-
-    printf("n: %u\t{%f\t%f}\t[%u\t%u] [%d\t%d]\n", pn, cos(pn * w_angle), sin(pn * w_angle), cx, cy, scos, ssin);
-    }
-    for (uint32_t n = 0; n < N; ++n)
-    {
-    pn = n;//reverseBits(n, trail);
-    p = pn % n2;
-    u_n2 = (pn >= n2);
-    p_sn4 = (p - n4);
-    cx = p - (p >= n4) * p_sn4 * 2;
-    cy = n4 - cx;
-    scos = u_n2 * p_sn4 + (pn < n2) * (n4 - p);
-    scos = 1 - (scos < 0) * 2;
-    ssin = -1 + u_n2 * 2;
-
-    printf("n: %u\t{%f\t%f}\n", pn, scos * cosTable[cx], ssin * cosTable[cy]);
-    }
-    for (uint32_t n = 0; n <= n4; ++n)
-    {
-    printf("cos(x)%un:\t%f\n", n, cosTable[n]);
-    }
-
-    #else*/
-    for (uint32_t n = 0; n <= N; ++n)
-    {
-        ang = w_angle * reverseBits(n, trail);
-        C_SINCOS(W[n], ang);        
-    }
-    /*
-    for (uint32_t n = 0; n <= N; ++n)
-    {
-        if (n % n4 == 0) printf("\n");
-        printf("n(%u):\t%f\t%f\t%u\n", n, W[n].r, W[n].i, ind[n]);
-    }
-    */
     dist = N;
     for (uint32_t k = 0; k < depth; ++k)
     {
@@ -183,20 +170,82 @@ void fft(my_complex *x, my_complex *X)
             u = l + dist;
             // Lower			            
             tmp_l = tmp[l];
-            p = (l >> bit);
-            C_MUL_ADD(tmp[l], W[p], tmp[u], tmp_l);
-            // Upper
             tmp_u = tmp[u];
+            p = (l >> bit);
+            C_MUL_ADD(tmp[l], W[p], tmp_u, tmp_l);
+            // Upper
             p = (u >> bit);
             C_MUL_ADD(tmp[u], W[p], tmp_u, tmp_l);
         }
     }
-    for (int n = 0; n < N; ++n)
+    for (uint32_t n = 0; n < N; ++n)
     {
-        X[n] = tmp[reverseBits(n, trail)];
+        X[n] = tmp[n];
     }
-    free(tmp);
-    free(W);
+    //free(tmp);
+    //free(W);
+}
+
+/*
+This computes an in-place complex-to-complex FFT
+x and y are the real and imaginary arrays of 2^m points.
+dir =  1 gives forward transform
+dir = -1 gives reverse transform
+*/
+short FFT(short int dir, long m, float *x, float *y)
+{
+    long n, i, i1, j, k, i2, l, l1, l2;
+    float c1, c2, tx, ty, t1, t2, u1, u2, z;
+    /* Calculate the number of points */
+    n = N;
+    /* Do the bit reversal */
+    i2 = n >> 1;
+    j = 0;
+    for (i = 0; i<n - 1; i++) {
+        if (i < j) {
+            tx = x[i];
+            ty = y[i];
+            x[i] = x[j];
+            y[i] = y[j];
+            x[j] = tx;
+            y[j] = ty;
+        }
+        k = i2;
+        while (k <= j) {
+            j -= k;
+            k >>= 1;
+        }
+        j += k;
+    }
+    /* Compute the FFT */
+    c1 = -1.f;
+    c2 = 0.f;
+    l2 = 1;
+    for (l = 0; l<m; l++) {
+        l1 = l2;
+        l2 <<= 1;
+        u1 = 1.f;
+        u2 = 0.f;
+        for (j = 0; j<l1; j++) {
+            for (i = j; i<n; i += l2) {
+                i1 = i + l1;
+                t1 = u1 * x[i1] - u2 * y[i1];
+                t2 = u1 * y[i1] + u2 * x[i1];
+                x[i1] = x[i] - t1;
+                y[i1] = y[i] - t2;
+                x[i] += t1;
+                y[i] += t2;
+            }
+            z = u1 * c1 - u2 * c2;
+            u2 = u1 * c2 + u2 * c1;
+            u1 = z;
+        }
+        c2 = sqrt((1.f - c1) / 2.f);
+        if (dir == 1)
+            c2 = -c2;
+        c1 = sqrt((1.f + c1) / 2.f);
+    }
+    return(TRUE);
 }
 
 double run_test(void(*fn)(my_complex*, my_complex*), my_complex *in, my_complex *out)
@@ -211,7 +260,7 @@ double run_test(void(*fn)(my_complex*, my_complex*), my_complex *in, my_complex 
     fn(in, out);
     QueryPerformanceCounter(&tStop);
     //printTime(tStart, tStop, freq);
-    return{ (double)(tStop.QuadPart - tStart.QuadPart) * 1000.0 / (float)freq.QuadPart };
+    return (double)(tStop.QuadPart - tStart.QuadPart) * 1000.0 / (float)freq.QuadPart;
 }
 
 void printTime(LARGE_INTEGER tStart, LARGE_INTEGER tStop, LARGE_INTEGER freq)
