@@ -12,14 +12,6 @@ typedef __int32 int32_t;
 typedef unsigned __int32 uint32_t;
 typedef kiss_fft_cpx my_complex;
 
-/*
-struct my_complex
-{
-float r;
-float i;
-};
-*/
-
 static const int tab32[32] =
 {
     0, 9, 1, 10, 13, 21, 2, 29, 11, 14, 16, 18, 22, 25, 3, 30, 8, 12, 20, 28, 15, 17, 24, 7, 19, 27, 23, 6, 26, 5, 4, 31
@@ -45,113 +37,59 @@ static const uint32_t revTbl256[] =
     0x0F, 0x8F, 0x4F, 0xCF, 0x2F, 0xAF, 0x6F, 0xEF, 0x1F, 0x9F, 0x5F, 0xDF, 0x3F, 0xBF, 0x7F, 0xFF
 };
 
-int log2_32(uint32_t value)
-{
-    value |= value >> 1; value |= value >> 2; value |= value >> 4; value |= value >> 8; value |= value >> 16;
-    return tab32[(uint32_t)(value * 0x07C4ACDD) >> 27];
-}
-
-uint32_t reverseBitsLowMem(uint32_t x, uint32_t l)
-{
-    x = (((x & 0xaaaaaaaa) >> 1) | ((x & 0x55555555) << 1));
-    x = (((x & 0xcccccccc) >> 2) | ((x & 0x33333333) << 2));
-    x = (((x & 0xf0f0f0f0) >> 4) | ((x & 0x0f0f0f0f) << 4));
-    x = (((x & 0xff00ff00) >> 8) | ((x & 0x00ff00ff) << 8));
-    return((x >> 16) | (x << 16)) >> (32 - l);
-}
-
-// This is only slightly faster on CPU, consider not using GPU?
 #define reverseBits(X,L) (((revTbl256[X & 0xff] << 24) | (revTbl256[(X >> 8) & 0xff] << 16) | (revTbl256[(X >> 16) & 0xff] << 8) | (revTbl256[(X >> 24) & 0xff])) >> L)
 #define C_MUL(R,A,B) R.r = A.r * B.r + A.i * B.i; R.i = A.r * B.i + A.i * B.r
 #define C_MUL_ADD(R,A,B,C) R.r = C.r + A.r * B.r + A.i * B.i; R.i = C.i + A.r * B.i + A.i * B.r
 #define C_ABS(A) sqrt(A.r * A.r + A.i * A.i)
 #define C_SINCOS(C,A) C.i = sin(A); C.r = cos(A)
 
+uint32_t reverseBitsLowMem(uint32_t x, uint32_t l);
+int log2_32(uint32_t value);
 void naive_dft(my_complex *x, my_complex *X);
 void fft(my_complex *x, my_complex *X);
+void fft_ref(my_complex *in, my_complex *out);
 void printTime(LARGE_INTEGER tStart, LARGE_INTEGER tStop, LARGE_INTEGER freq);
 void printResult(my_complex *c, int n, char *str, int verified);
-int verify_impulse(my_complex *c, int size);
-void compareComplex(my_complex *c1, my_complex *c2, double t1, double t2);
+int verify_in(my_complex *c, int size);
+void compareComplex(my_complex *c1, my_complex *c2);
 void test_p();
+double run_test(void(*fn)(my_complex*, my_complex*), my_complex *in, my_complex *out);
 
 int main()
-{
-    LARGE_INTEGER freq, tStart, tStop;
-    double time_FFT, time_KFFT;//, time_NDFT;
-
-    /* Get ticks per second */
-    QueryPerformanceFrequency(&freq);
-
-    /* Prep data */
-    my_complex *impulse = (my_complex *)malloc(sizeof(my_complex)*N);
-    my_complex *res_FFT = (my_complex *)malloc(sizeof(my_complex)*N);
-    my_complex *cx_out = (my_complex *)malloc(sizeof(my_complex)*N);
-    float *sintest = (float *)malloc(sizeof(float)*N);
+{    
+    double time, time_ref;    
+    my_complex *in = (my_complex *)malloc(sizeof(my_complex) * N);
+    my_complex *out = (my_complex *)malloc(sizeof(my_complex) * N);
+    my_complex *out_ref = (my_complex *)malloc(sizeof(my_complex) * N);    
     for (int i = 0; i < N; ++i)
     {
-        impulse[i].r = 0.f;
-        impulse[i].i = 0.f;
+        in[i].r = in[i].i = 0.f;
     }
-    impulse[1].r = 1.0;
-
-    /* FFT */
+    in[1].r = 1.f;
+        
     printf("\nRunning FFT...\n");
-    //fft(impulse, res_FFT);
-    QueryPerformanceCounter(&tStart);
-    fft(impulse, res_FFT);
-    QueryPerformanceCounter(&tStop);
-    printTime(tStart, tStop, freq);
-    time_FFT = (double)(tStop.QuadPart - tStart.QuadPart) * 1000.0 / (float)freq.QuadPart;
+    printf("Time:\t", time = run_test(fft, in, out));
 
-    /* KissFFT for comparissons */
-    printf("Running KISS_FFT...\n");
-    kiss_fft_cfg cfgW = kiss_fft_alloc(N, 0, 0, 0);
-    kiss_fft(cfgW, impulse, cx_out);
-    QueryPerformanceCounter(&tStart);
-    kiss_fft_cfg cfg = kiss_fft_alloc(N, 0, 0, 0);
-    kiss_fft(cfg, impulse, cx_out);
-    QueryPerformanceCounter(&tStop);
-    printTime(tStart, tStop, freq);
-    time_KFFT = (double)(tStop.QuadPart - tStart.QuadPart) * 1000.0 / (float)freq.QuadPart;
+    printf("\nRunning KISS FFT...\n");
+    printf("Time:\t", time_ref = run_test(fft_ref, in, out_ref));
 
-    printResult(res_FFT, N, "impulse", 1);
-    printResult(cx_out, N, "impulse", 1);
-    compareComplex(res_FFT, cx_out, time_FFT, time_KFFT);
+    printResult(out, N, "in", 1);
+    printResult(out_ref, N, "in", 1);
+    compareComplex(out, out_ref);
+    printf("Quota: %f\t(lower is faster)", (time / time_ref));
+        
+    free(in);
+    free(out);
 
-    free(cfg);
-    free(impulse);
-    free(res_FFT);
     getchar();
     return 0;
 }
 
-/* Naive Discrete Fourier Transform, essentially as per definition */
-void naive_dft(my_complex *x, my_complex *X)
+void fft_ref(my_complex *in, my_complex *out)
 {
-    float real, img;
-    my_complex y = { 0.0, 0.0 };
-    float re, im;
-    my_complex tmp = { 0.0, 0.0 };
-    float theta = 1.0;
-    float c1 = -M_2_PI / N;
-    float c2 = 1.0;
-    for (int k = 0; k < N; ++k)
-    {
-        real = 0.0;
-        img = 0.0;
-        c2 = c1 * k;
-        for (int n = 0; n < N; ++n)
-        {
-            theta = c2 * n;
-            re = cos(theta);
-            im = sin(theta);
-            real += x[n].r * re + x[n].i * im;
-            img += x[n].r * im + x[n].i * re;
-        }
-        x[k].r = real;
-        x[k].i = img;
-    }
+    kiss_fft_cfg cfg = kiss_fft_alloc(N, 0, 0, 0);
+    kiss_fft(cfg, in, out);
+    free(cfg);
 }
 
 /* Naive Fast Fourier Transform */
@@ -222,16 +160,15 @@ void fft(my_complex *x, my_complex *X)
     for (uint32_t n = 0; n <= N; ++n)
     {
         ang = w_angle * reverseBits(n, trail);
-        C_SINCOS(W[n], ang);
-        ind[n] = reverseBits(n, trail);
+        C_SINCOS(W[n], ang);        
     }
-    
+    /*
     for (uint32_t n = 0; n <= N; ++n)
     {
         if (n % n4 == 0) printf("\n");
         printf("n(%u):\t%f\t%f\t%u\n", n, W[n].r, W[n].i, ind[n]);
     }
-    
+    */
     dist = N;
     for (uint32_t k = 0; k < depth; ++k)
     {
@@ -262,6 +199,21 @@ void fft(my_complex *x, my_complex *X)
     free(W);
 }
 
+double run_test(void(*fn)(my_complex*, my_complex*), my_complex *in, my_complex *out)
+{
+    LARGE_INTEGER freq, tStart, tStop;
+    /* Get ticks per second */
+    QueryPerformanceFrequency(&freq);
+    /* Warm up */
+    fn(in, out);
+    QueryPerformanceCounter(&tStart);
+    /* Test Run */
+    fn(in, out);
+    QueryPerformanceCounter(&tStop);
+    //printTime(tStart, tStop, freq);
+    return{ (double)(tStop.QuadPart - tStart.QuadPart) * 1000.0 / (float)freq.QuadPart };
+}
+
 void printTime(LARGE_INTEGER tStart, LARGE_INTEGER tStop, LARGE_INTEGER freq)
 {
     printf("Time (ms): %f\n", (float)(tStop.QuadPart - tStart.QuadPart) * 1000.0 / (float)freq.QuadPart);
@@ -278,7 +230,7 @@ void printResult(my_complex *c, int n, char *str, int verified)
     printf("\n%s\n", verified ? "Successful" : "Error");
 }
 
-void compareComplex(my_complex *c1, my_complex *c2, double t1, double t2)
+void compareComplex(my_complex *c1, my_complex *c2)
 {
     double m = 0.00001;
     double max_r = -DBL_MAX;
@@ -288,6 +240,55 @@ void compareComplex(my_complex *c1, my_complex *c2, double t1, double t2)
         max_r = max(abs((double)c1[i].r - (double)c2[i].r), max_r);
         max_i = max(abs((double)c1[i].i - (double)c2[i].i), max_i);
     }
-    printf("\nDiff: (%f, %f)\n", max_r, max_i);
-    printf("\n%s\n", (max_r > m || max_i > m) ? "NOT EQUAL" : "EQUAL");
+    if ((max_r > m || max_i > m))
+    {
+        printf("\nNOT EQUAL\nDiff: (%f, %f)\n", max_r, max_i);
+    }
+    else
+    {
+        printf("\nEQUAL\n");
+    }
+}
+
+int log2_32(uint32_t value)
+{
+    value |= value >> 1; value |= value >> 2; value |= value >> 4; value |= value >> 8; value |= value >> 16;
+    return tab32[(uint32_t)(value * 0x07C4ACDD) >> 27];
+}
+
+uint32_t reverseBitsLowMem(uint32_t x, uint32_t l)
+{
+    x = (((x & 0xaaaaaaaa) >> 1) | ((x & 0x55555555) << 1));
+    x = (((x & 0xcccccccc) >> 2) | ((x & 0x33333333) << 2));
+    x = (((x & 0xf0f0f0f0) >> 4) | ((x & 0x0f0f0f0f) << 4));
+    x = (((x & 0xff00ff00) >> 8) | ((x & 0x00ff00ff) << 8));
+    return((x >> 16) | (x << 16)) >> (32 - l);
+}
+
+/* Naive Discrete Fourier Transform, essentially as per definition */
+void naive_dft(my_complex *x, my_complex *X)
+{
+    float real, img;
+    my_complex y = { 0.0, 0.0 };
+    float re, im;
+    my_complex tmp = { 0.0, 0.0 };
+    float theta = 1.0;
+    float c1 = -M_2_PI / N;
+    float c2 = 1.0;
+    for (int k = 0; k < N; ++k)
+    {
+        real = 0.0;
+        img = 0.0;
+        c2 = c1 * k;
+        for (int n = 0; n < N; ++n)
+        {
+            theta = c2 * n;
+            re = cos(theta);
+            im = sin(theta);
+            real += x[n].r * re + x[n].i * im;
+            img += x[n].r * im + x[n].i * re;
+        }
+        x[k].r = real;
+        x[k].i = img;
+    }
 }
