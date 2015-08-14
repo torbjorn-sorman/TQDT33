@@ -2,11 +2,14 @@
 #include <Windows.h>
 #include <cmath>
 #include <limits>
+#include <stdlib.h>
+#include <string.h>
 
 #include "kiss_fft.h"
 
-#define M_2_PI 6.28318530718
-#define N 8 // 8192, 65536, 1048576, 16777216
+#define M_2_PI 6.28318530718f
+#define M_PI 3.14159265359f
+#define N 512 // 8192, 65536, 1048576, 2097152, 4194304, 8388608, 16777216
 
 typedef __int32 int32_t;
 typedef unsigned __int32 uint32_t;
@@ -46,105 +49,249 @@ static const uint32_t revTbl256[] =
 uint32_t reverseBitsLowMem(uint32_t x, uint32_t l);
 int log2_32(uint32_t value);
 void naive_dft(my_complex *x, my_complex *X);
-void fft(my_complex *x, my_complex *X);
-void fft_ref(my_complex *in, my_complex *out);
-void fft_ref2(my_complex *x, my_complex *X);
-short FFT(short int dir, long m, float *x, float *y);
+
+void fft(int dir, my_complex *x, my_complex *X);
+void fft_ref(int dir, my_complex *in, my_complex *out);
+void fft_ref2(int dir, my_complex *x, my_complex *X);
+short FFT(short int dir, long m, my_complex *);
+void fft2d(int dir, void(*fn)(int, my_complex*, my_complex*), my_complex **seq2d);
+
 void printTime(LARGE_INTEGER tStart, LARGE_INTEGER tStop, LARGE_INTEGER freq);
 void printResult(my_complex *c, int n, char *str, int verified);
-int verify_in(my_complex *c, int size);
 void compareComplex(my_complex *c1, my_complex *c2);
-void test_p();
-double run_test(void(*fn)(my_complex*, my_complex*), my_complex *in, my_complex *out);
+
+double run_test(int dir, void(*fn)(int, my_complex*, my_complex*), my_complex *in, my_complex *out);
+double run_2dtest(int dir, void(*fn)(int, my_complex*, my_complex*), my_complex **in);
+
+int writeppm(char *filename, int width, int height, unsigned char *data);
+unsigned char *readppm(char *filename, int *width, int *height);
+
+void imgToComplex(unsigned char *img, my_complex **com);
+void realToImg(my_complex **com, unsigned char *img);
+void fftToImg(my_complex **com, unsigned char *img);
 
 int main()
 {
-    double time, time_ref;
+
+    //double time;//, time_ref;//, time_ref2;
+    char *filename = "lena_std.ppm";
+
+    int n, m;
+    unsigned char *image = readppm(filename, &n, &m);
+
+    if (n != N || m != N)
+    {
+        printf("Image size not square and pw of 2.\n");
+        getchar();
+        return 0;
+    }
+
+    unsigned char *grey = (unsigned char *)malloc(sizeof(unsigned char) * N * N * 3);
+    my_complex **file_in = (my_complex **)malloc(sizeof(my_complex) * N);
+    for (int i = 0; i < N; ++i)
+        file_in[i] = (my_complex *)malloc(sizeof(my_complex) * N);
+
+    imgToComplex(image, file_in);
+    realToImg(file_in, grey);
+    writeppm("greyscale.ppm", N, N, grey);
+
+    fft2d(1, fft, file_in);
+    fftToImg(file_in, grey);
+    writeppm("magnitude.ppm", N, N, grey);
+
+    fft2d(-1, fft, file_in);
+    realToImg(file_in, grey);
+    writeppm("fftToGrey.ppm", N, N, grey);
+
+    for (int i = 0; i < N; ++i)
+        free(file_in[i]);
+    free(file_in);
+    free(grey);
+    printf("Done...\n");
+    /*
     my_complex *in = (my_complex *)malloc(sizeof(my_complex) * N);
     my_complex *out = (my_complex *)malloc(sizeof(my_complex) * N);
-    my_complex *out_ref = (my_complex *)malloc(sizeof(my_complex) * N);
-    my_complex *out_ref2 = (my_complex *)malloc(sizeof(my_complex) * N);
-    if (! in)
-        printf("Failed on in\n");
-    if (!out)
-        printf("Failed on out\n");
-    if (!out_ref)
-        printf("Failed on out1\n");
-    if (!out_ref2)
-        printf("Failed on out2\n");
 
     for (int i = 0; i < N; ++i)
     {
-        in[i].r = in[i].i = 0.f;
+    in[i].r = sin(i * (M_PI / N));
+    in[i].i = 0.f;
     }
-    in[1].r = 1.f;
-
-    printf("\nRunning FFT...\n");
-    printf("Time: %f\t", time = run_test(fft, in, out));
-
-    printf("\nRunning REF FFT...\n");
-    printf("Time: %f\t", time_ref = run_test(fft_ref2, in, out_ref2));
-
-    printf("\nRunning KISS FFT...\n");
-    printf("Time: %f\t", time_ref = run_test(fft_ref, in, out_ref));
-
+    printResult(in, N, "in", 1);
+    fft(1, in, out);
     printResult(out, N, "in", 1);
-    printResult(out_ref, N, "in", 1);
-    printResult(out_ref2, N, "in", 1);
-    compareComplex(out, out_ref2);
-    compareComplex(out, out_ref);
-    compareComplex(out, out_ref);
-    printf("Quota: %f\t(lower is faster)", (time / time_ref));
-
-    free(in);
-    free(out);
-
+    fft(-1, out, in);
+    printResult(in, N, "in", 1);
+    */
     getchar();
     return 0;
 }
 
-void fft_ref(my_complex *in, my_complex *out)
+//my_complex **file_in = (my_complex **)malloc(sizeof(my_complex) * N * N);
+//my_complex *in = (my_complex *)malloc(sizeof(my_complex) * N);
+//my_complex *out = (my_complex *)malloc(sizeof(my_complex) * N);
+//my_complex *out_ref = (my_complex *)malloc(sizeof(my_complex) * N);
+//my_complex *out_ref2 = (my_complex *)malloc(sizeof(my_complex) * N);
+/*
+for (int i = 0; i < N; ++i)
 {
-    kiss_fft_cfg cfg = kiss_fft_alloc(N, 0, 0, 0);
+in[i].r = in[i].i = 0.f;
+}
+in[1].r = 1.f;
+*/
+//printf("\nRunning FFT 2D...\n");
+//printf("Time: %f\t\n", time = run_2dtest(1, fft, file_in));
+//printf("Time: %f\t", time = run_test(fft, in, out));
+
+//printf("\nRunning REF FFT...\n");
+//printf("Time: %f\t", time_ref2 = run_test(fft_ref2, in, out_ref2));
+
+//printf("\nRunning KISS FFT...\n");
+//printf("Time: %f\t", time_ref = run_test(fft_ref, in, out_ref));
+
+/*
+printResult(out, N, "in", 1);
+printResult(out_ref, N, "in", 1);
+printResult(out_ref2, N, "in", 1);
+*/
+//compareComplex(out, out_ref2);
+//compareComplex(out, out_ref);
+//compareComplex(out, out_ref);
+//printf("Quota: %f\t(lower is faster)\n", (time / time_ref));
+//printf("Quota: %f\t(lower is faster)\n", (time / time_ref2));
+
+//free(in);
+//free(out);
+
+void imgToComplex(unsigned char *img, my_complex **com)
+{
+    float r, g, b, intensity;
+    uint32_t px;
+    for (uint32_t y = 0; y < N; ++y)
+    {
+        for (uint32_t x = 0; x < N; ++x)
+        {
+            px = y * N * 3 + x * 3;
+            r = img[px];
+            g = img[px + 1];
+            b = img[px + 2];
+            intensity = ((r + g + b) / 3.f) / 255.f;
+            com[y][x].r = intensity;
+            com[y][x].i = 0.f;
+        }
+    }
+}
+
+void minRange(double *m, double *r, my_complex **com)
+{
+    uint32_t px;
+    double mi = DBL_MAX;
+    double ma = DBL_MIN;
+    for (uint32_t y = 0; y < N; ++y)
+    {
+        for (uint32_t x = 0; x < N; ++x)
+        {
+            mi = min(mi, com[y][x].r);
+            ma = max(ma, com[y][x].r);
+        }
+    }
+    printf("min: %f, max: %f\n", mi, ma);
+    *m = mi;
+    *r = ma - mi;
+}
+
+void realToImg(my_complex **com, unsigned char *img)
+{
+    uint32_t px;
+    double magnitude, vmin, range;
+    minRange(&vmin, &range, com);
+    printf("min: %f, range: %f\n", vmin, range);
+    for (uint32_t y = 0; y < N; ++y)
+    {
+        for (uint32_t x = 0; x < N; ++x)
+        {
+            px = y * N * 3 + x * 3;
+            img[px] = img[px + 1] = img[px + 2] = (unsigned char)(255.0 * com[y][x].r);
+        }
+    }
+}
+
+void fftToImg(my_complex **com, unsigned char *img)
+{
+    uint32_t px;
+    double magnitude;
+    for (uint32_t y = 0; y < N; ++y)
+    {
+        for (uint32_t x = 0; x < N; ++x)
+        {
+            px = y * N * 3 + x * 3;
+            magnitude = sqrt(com[y][x].r *com[y][x].r + com[y][x].i *com[y][x].i);
+            img[px] = img[px + 1] = img[px + 2] = (unsigned char)(255.0 * magnitude);
+        }
+    }
+}
+
+void fft2d(int dir, void(*fn)(int, my_complex*, my_complex*), my_complex **seq2d)
+{
+    const uint32_t depth = log2_32(N);
+    uint32_t row, col;
+    my_complex *seq, *out;
+
+    /* Transform the rows */
+    seq = (my_complex *)malloc(N * sizeof(my_complex));
+    out = (my_complex *)malloc(N * sizeof(my_complex));
+
+    for (row = 0; row < N; ++row)
+    {
+        for (col = 0; col < N; ++col)
+            seq[col] = seq2d[row][col];
+
+        fn(dir, seq, out);
+
+        for (col = 0; col < N; ++col)
+            seq2d[row][col] = out[col];
+    }
+    for (col = 0; col < N; ++col)
+    {
+        for (row = 0; row < N; ++row)
+            seq[row] = seq2d[row][col];
+
+        fn(dir, seq, out);
+
+        for (row = 0; row < N; ++row)
+            seq2d[row][col] = out[row];
+    }
+    free(seq);
+}
+
+void fft_ref(int dir, my_complex *in, my_complex *out)
+{
+    kiss_fft_cfg cfg = kiss_fft_alloc(N, (dir == -1), 0, 0);
     kiss_fft(cfg, in, out);
     free(cfg);
 }
 
-void fft_ref2(my_complex *in, my_complex *out)
+void fft_ref2(int dir, my_complex *in, my_complex *out)
 {
-    float *x = (float *)malloc(sizeof(float) * N);
-    float *y = (float *)malloc(sizeof(float) * N);
     for (int i = 0; i < N; ++i)
     {
-        x[i] = in[i].r;
-        y[i] = in[i].i;
+        out[i] = in[i];
     }
-    FFT(1, log2_32(N), x, y);
-    for (int i = 0; i < N; ++i)
-    {
-        out[i].r = x[i];
-        out[i].i = y[i];
-    }
-    free(x);
-    free(y);
+    FFT(dir, log2_32(N), out);
 }
 
 /* Naive Fast Fourier Transform */
-void fft(my_complex *x, my_complex *X)
+void fft(int dir, my_complex *x, my_complex *X)
 {
     const uint32_t depth = log2_32(N);
     const uint32_t n2 = (N / 2);
     my_complex *W = (my_complex *)malloc(sizeof(my_complex) * N);
     my_complex *tmp = (my_complex *)malloc(sizeof(my_complex) * N);
-    if (tmp == NULL)
-        printf("tmp is null\n");
-    if (X == NULL)
-        printf("X is null\n");
     my_complex tmp_u, tmp_l;
     uint32_t trail, bit, u, l, p, dist, dist_2, offset;
     float ang, w_angle;
 
-    w_angle = -(M_2_PI / N);
+    w_angle = dir * -(M_2_PI / N);
     trail = 32 - depth;
     bit = 0;
     for (uint32_t n = 0; n < N; ++n)
@@ -168,19 +315,21 @@ void fft(my_complex *x, my_complex *X)
             offset += (n >= (dist + offset)) * dist_2;
             l = (n & ~(1 << bit)) + offset;
             u = l + dist;
-            // Lower			            
             tmp_l = tmp[l];
             tmp_u = tmp[u];
             p = (l >> bit);
             C_MUL_ADD(tmp[l], W[p], tmp_u, tmp_l);
-            // Upper
             p = (u >> bit);
             C_MUL_ADD(tmp[u], W[p], tmp_u, tmp_l);
         }
     }
-    for (uint32_t n = 0; n < N; ++n)
+    if (dir == 1)
     {
-        X[n] = tmp[n];
+        for (uint32_t n = 0; n < N; ++n)
+        {
+            X[n].r = tmp[n].r / N;
+            X[n].i = tmp[n].i / N;
+        }
     }
     //free(tmp);
     //free(W);
@@ -191,24 +340,24 @@ This computes an in-place complex-to-complex FFT
 x and y are the real and imaginary arrays of 2^m points.
 dir =  1 gives forward transform
 dir = -1 gives reverse transform
+
+Fails in the long run since the error accumulates... N = 512, error < 0.00001
 */
-short FFT(short int dir, long m, float *x, float *y)
+short FFT(short int dir, long m, my_complex *x)
 {
     long n, i, i1, j, k, i2, l, l1, l2;
-    float c1, c2, tx, ty, t1, t2, u1, u2, z;
+    float c1, c2, t1, t2, u1, u2, z;
+    my_complex tx;
     /* Calculate the number of points */
     n = N;
     /* Do the bit reversal */
     i2 = n >> 1;
     j = 0;
-    for (i = 0; i<n - 1; i++) {
+    for (i = 0; i < n - 1; i++) {
         if (i < j) {
             tx = x[i];
-            ty = y[i];
             x[i] = x[j];
-            y[i] = y[j];
             x[j] = tx;
-            y[j] = ty;
         }
         k = i2;
         while (k <= j) {
@@ -221,20 +370,20 @@ short FFT(short int dir, long m, float *x, float *y)
     c1 = -1.f;
     c2 = 0.f;
     l2 = 1;
-    for (l = 0; l<m; l++) {
+    for (l = 0; l < m; l++) {
         l1 = l2;
         l2 <<= 1;
         u1 = 1.f;
         u2 = 0.f;
-        for (j = 0; j<l1; j++) {
-            for (i = j; i<n; i += l2) {
+        for (j = 0; j < l1; j++) {
+            for (i = j; i < n; i += l2) {
                 i1 = i + l1;
-                t1 = u1 * x[i1] - u2 * y[i1];
-                t2 = u1 * y[i1] + u2 * x[i1];
-                x[i1] = x[i] - t1;
-                y[i1] = y[i] - t2;
-                x[i] += t1;
-                y[i] += t2;
+                t1 = u1 * x[i1].r - u2 * x[i1].i;
+                t2 = u1 * x[i1].i + u2 * x[i1].r;
+                x[i1].r = x[i].r - t1;
+                x[i1].i = x[i].i - t2;
+                x[i].r += t1;
+                x[i].i += t2;
             }
             z = u1 * c1 - u2 * c2;
             u2 = u1 * c2 + u2 * c1;
@@ -248,18 +397,28 @@ short FFT(short int dir, long m, float *x, float *y)
     return(TRUE);
 }
 
-double run_test(void(*fn)(my_complex*, my_complex*), my_complex *in, my_complex *out)
+double run_test(void(*fn)(int, my_complex*, my_complex*), my_complex *in, my_complex *out)
 {
     LARGE_INTEGER freq, tStart, tStop;
-    /* Get ticks per second */
+    double m = DBL_MAX;
     QueryPerformanceFrequency(&freq);
-    /* Warm up */
-    fn(in, out);
+    for (int i = 0; i < 100; ++i)
+    {
+        QueryPerformanceCounter(&tStart);
+        fn(0, in, out);
+        QueryPerformanceCounter(&tStop);
+        m = min(m, (double)(tStop.QuadPart - tStart.QuadPart) * 1000.0 / (float)freq.QuadPart);
+    }
+    return m;
+}
+
+double run_2dtest(int dir, void(*fn)(int, my_complex*, my_complex*), my_complex **in)
+{
+    LARGE_INTEGER freq, tStart, tStop;
+    QueryPerformanceFrequency(&freq);
     QueryPerformanceCounter(&tStart);
-    /* Test Run */
-    fn(in, out);
+    fft2d(dir, fn, in);
     QueryPerformanceCounter(&tStop);
-    //printTime(tStart, tStop, freq);
     return (double)(tStop.QuadPart - tStart.QuadPart) * 1000.0 / (float)freq.QuadPart;
 }
 
@@ -276,7 +435,6 @@ void printResult(my_complex *c, int n, char *str, int verified)
         printf("{ %f,\t%fi }\n", c[i].r, c[i].i);
     if (len != n)
         printf("...\n");
-    printf("\n%s\n", verified ? "Successful" : "Error");
 }
 
 void compareComplex(my_complex *c1, my_complex *c2)
@@ -290,13 +448,9 @@ void compareComplex(my_complex *c1, my_complex *c2)
         max_i = max(abs((double)c1[i].i - (double)c2[i].i), max_i);
     }
     if ((max_r > m || max_i > m))
-    {
         printf("\nNOT EQUAL\nDiff: (%f, %f)\n", max_r, max_i);
-    }
     else
-    {
         printf("\nEQUAL\n");
-    }
 }
 
 int log2_32(uint32_t value)
@@ -340,4 +494,152 @@ void naive_dft(my_complex *x, my_complex *X)
         x[k].r = real;
         x[k].i = img;
     }
+}
+
+int writeppm(char *filename, int width, int height, unsigned char *data)
+{
+    FILE *fp;
+    int error = 1;
+    int i, h, v;
+
+    if (filename != NULL)
+    {
+        fopen_s(&fp, filename, "w");
+
+        if (fp != NULL)
+        {
+            // Write PPM file
+            // Header	
+            fprintf(fp, "P3\n");
+            fprintf(fp, "# written by Ingemars PPM writer\n");
+            fprintf(fp, "%d %d\n", width, height);
+            fprintf(fp, "%d\n", 255); // range
+
+            // Data
+            for (v = height - 1; v >= 0; v--)
+            {
+                for (h = 0; h < width; h++)
+                {
+                    i = (width*v + h) * 3; // assumes rgb, not rgba
+                    fprintf(fp, "%d %d %d ", data[i], data[i + 1], data[i + 2]);
+                }
+                fprintf(fp, "\n"); // range
+            }
+
+            if (fwrite("\n", sizeof(char), 1, fp) == 1)
+                error = 0; // Probable success
+            fclose(fp);
+        }
+    }
+    return(error);
+}
+
+unsigned char *readppm(char *filename, int *width, int *height)
+{
+    FILE *fd;
+    int  k;//, nm;
+    char c;
+    int i, j;
+    char b[100];
+    //float s;
+    int red, green, blue;
+    long numbytes;//, howmuch;
+    int n;
+    int m;
+    unsigned char *image;
+
+    fopen_s(&fd, filename, "rb");
+    if (fd == NULL)
+    {
+        printf("Could not open %s\n", filename);
+        return NULL;
+    }
+    c = getc(fd);
+    if (c == 'P' || c == 'p')
+        c = getc(fd);
+
+    if (c == '3')
+    {
+        printf("%s is a PPM file (plain text version)\n", filename);
+
+        // NOTE: This is not very good PPM code! Comments are not allowed
+        // except immediately after the magic number.
+        c = getc(fd);
+        if (c == '\n' || c == '\r') // Skip any line break and comments
+        {
+            c = getc(fd);
+            while (c == '#')
+            {
+                fscanf_s(fd, "%[^\n\r] ", b);
+                printf("%s\n", b);
+                c = getc(fd);
+            }
+            ungetc(c, fd);
+        }
+        fscanf_s(fd, "%d %d %d", &n, &m, &k);
+
+        printf("%d rows  %d columns  max value= %d\n", n, m, k);
+
+        numbytes = n * m * 3;
+        image = (unsigned char *)malloc(numbytes);
+        if (image == NULL)
+        {
+            printf("Memory allocation failed!\n");
+            return NULL;
+        }
+        for (i = m - 1; i >= 0; i--) for (j = 0; j < n; j++) // Important bug fix here!
+        { // i = row, j = column
+            fscanf_s(fd, "%d %d %d", &red, &green, &blue);
+            image[(i*n + j) * 3] = red * 255 / k;
+            image[(i*n + j) * 3 + 1] = green * 255 / k;
+            image[(i*n + j) * 3 + 2] = blue * 255 / k;
+        }
+    }
+    else
+        if (c == '6')
+        {
+            printf("%s is a PPM file (raw version)!\n", filename);
+
+            c = getc(fd);
+            if (c == '\n' || c == '\r') // Skip any line break and comments
+            {
+                c = getc(fd);
+                while (c == '#')
+                {
+                    fscanf_s(fd, "%[^\n\r] ", b);
+                    printf("%s\n", b);
+                    c = getc(fd);
+                }
+                ungetc(c, fd);
+            }
+            fscanf_s(fd, "%d %d %d", &n, &m, &k);
+            printf("%d rows  %d columns  max value= %d\n", m, n, k);
+            c = getc(fd); // Skip the last whitespace
+
+            numbytes = n * m * 3;
+            image = (unsigned char *)malloc(numbytes);
+            if (image == NULL)
+            {
+                printf("Memory allocation failed!\n");
+                return NULL;
+            }
+            // Read and re-order as necessary
+            for (i = m - 1; i >= 0; i--) for (j = 0; j < n; j++) // Important bug fix here!
+            {
+                image[(i*n + j) * 3 + 0] = getc(fd);
+                image[(i*n + j) * 3 + 1] = getc(fd);
+                image[(i*n + j) * 3 + 2] = getc(fd);
+            }
+        }
+        else
+        {
+            printf("%s is not a PPM file!\n", filename);
+            return NULL;
+        }
+
+    printf("read image\n");
+
+    *height = m;
+    *width = n;
+    return image;
 }
