@@ -23,7 +23,11 @@ void printResult(my_complex *c, int n, char *str, int verified);
 
 int main()
 {
-    run_imgTest("lena_std.ppm", mrfft, N);
+    if (run_imgTest(mrfft, N))
+        printf("Test successful!\n");
+    else
+        printf("Test failed!\n");
+
     getchar();
     return 0;
 }

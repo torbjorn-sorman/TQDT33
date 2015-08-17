@@ -8,20 +8,21 @@ void mrfft(int dir, my_complex *x, my_complex *X, uint32_t N)
     my_complex *W = (my_complex *)malloc(sizeof(my_complex) * N);
     my_complex *tmp = (my_complex *)malloc(sizeof(my_complex) * N);
     my_complex tmp_u, tmp_l;
-    uint32_t trail, bit, u, l, p, dist, dist_2, offset;
+    uint32_t lead, bit, u, l, p, dist, dist_2, offset;
     float ang, w_angle;
 
-    w_angle = dir * -(M_2_PI / N);
-    trail = 32 - depth;
+    w_angle = (dir == FORWARD_FFT ? 1.f : -1.f) * -(M_2_PI / N);
+    lead = 32 - depth;
     bit = 0;
     for (uint32_t n = 0; n < N; ++n)
     {
         tmp[n] = x[n];
     }
-    for (uint32_t n = 0; n <= N; ++n)
+    for (uint32_t n = 0; n < N; ++n)
     {
-        ang = w_angle * n;
-        C_SINCOS(W[n], ang);
+        ang = w_angle * reverseBits(n, lead);
+        W[n].r = cos(ang);
+        W[n].i = sin(ang);
     }
     dist = N;
     for (uint32_t k = 0; k < depth; ++k)
@@ -35,20 +36,34 @@ void mrfft(int dir, my_complex *x, my_complex *X, uint32_t N)
             offset += (n >= (dist + offset)) * dist_2;
             l = (n & ~(1 << bit)) + offset;
             u = l + dist;
-            tmp_l = tmp[l];
-            tmp_u = tmp[u];
-            p = (l >> bit);
-            C_MUL_ADD(tmp[l], W[p], tmp_u, tmp_l);
+            tmp_l.r = tmp[l].r;
+            tmp_l.i = tmp[l].i;
+            tmp_u.r = tmp[u].r;
+            tmp_u.i = tmp[u].i;
+            p = (l >> bit);            
+            tmp[l].r = tmp_l.r + W[p].r * tmp_u.r - W[p].i * tmp_u.i;
+            tmp[l].i = tmp_l.i + W[p].r * tmp_u.i + W[p].i * tmp_u.r;
             p = (u >> bit);
-            C_MUL_ADD(tmp[u], W[p], tmp_u, tmp_l);
+            tmp[u].r = tmp_l.r + W[p].r * tmp_u.r - W[p].i * tmp_u.i;
+            tmp[u].i = tmp_l.i + W[p].r * tmp_u.i + W[p].i * tmp_u.r;
         }
     }
-    if (dir == 1)
+    if (dir == INVERSE_FFT)
     {
         for (uint32_t n = 0; n < N; ++n)
         {
-            X[n].r = tmp[n].r / N;
-            X[n].i = tmp[n].i / N;
+            p = reverseBits(n, lead);
+            X[p].r = tmp[n].r / N;
+            X[p].i = tmp[n].i / N;
+        }
+    }
+    else
+    {
+        for (uint32_t n = 0; n < N; ++n)
+        {
+            p = reverseBits(n, lead);
+            X[p].r = tmp[n].r;
+            X[p].i = tmp[n].i;
         }
     }
     //free(tmp);
@@ -61,32 +76,45 @@ void mrfft2d(int dir, void(*fn)(int, my_complex*, my_complex*, uint32_t), my_com
     uint32_t row, col;
     my_complex *seq, *out;
 
-    /* Transform the rows */
     seq = (my_complex *)malloc(N * sizeof(my_complex));
     out = (my_complex *)malloc(N * sizeof(my_complex));
 
     for (row = 0; row < N; ++row)
     {
         for (col = 0; col < N; ++col)
-            seq[col] = seq2d[row][col];
+        {
+            seq[col].r = seq2d[row][col].r;
+            seq[col].i = seq2d[row][col].i;
+        }
 
         fn(dir, seq, out, N);
 
         for (col = 0; col < N; ++col)
-            seq2d[row][col] = out[col];
+        {
+            seq2d[row][col].r = out[col].r;
+            seq2d[row][col].i = out[col].i;
+        }
     }
-
+    // TODO: Do transpose!    
     for (col = 0; col < N; ++col)
     {
         for (row = 0; row < N; ++row)
-            seq[row] = seq2d[row][col];
+        {
+            seq[row].r = seq2d[row][col].r;
+            seq[row].i = seq2d[row][col].i;
+        }
 
         fn(dir, seq, out, N);
 
         for (row = 0; row < N; ++row)
-            seq2d[row][col] = out[row];
-    }
+        {
+            seq2d[row][col].r = out[row].r;
+            seq2d[row][col].i = out[row].i;
+        }
+    }    
+    // TODO: Transpose back!
     free(seq);
+    free(out);
 }
 
 /* Naive Discrete Fourier Transform, essentially as per definition */

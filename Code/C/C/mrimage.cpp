@@ -26,15 +26,16 @@ void minRange(double *m, double *r, my_complex **com, uint32_t N)
 {
     double mi = DBL_MAX;
     double ma = DBL_MIN;
+    double mag;
     for (uint32_t y = 0; y < N; ++y)
     {
         for (uint32_t x = 0; x < N; ++x)
         {
-            mi = min(mi, com[y][x].r);
-            ma = max(ma, com[y][x].r);
+            mag = sqrt(com[y][x].r *com[y][x].r + com[y][x].i *com[y][x].i);
+            mi = min(mi, mag);
+            ma = max(ma, mag);
         }
     }
-    printf("min: %f, max: %f\n", mi, ma);
     *m = mi;
     *r = ma - mi;
 }
@@ -59,30 +60,84 @@ void realToImg(my_complex **com, unsigned char *img, uint32_t N)
 void fftToImg(my_complex **com, unsigned char *img, uint32_t N)
 {
     uint32_t px;
-    double magnitude;
+    double magnitude, min, range;
+    minRange(&min, &range, com, N);
+    //printf("Min: %f, Range: %f\n", min, range);
     for (uint32_t y = 0; y < N; ++y)
     {
         for (uint32_t x = 0; x < N; ++x)
         {
-            px = y * N * 3 + x * 3;
+            px = (y * N + x) * 3;
             magnitude = sqrt(com[y][x].r *com[y][x].r + com[y][x].i *com[y][x].i);
-            img[px] = img[px + 1] = img[px + 2] = (unsigned char)(255.0 * magnitude);
+            img[px] = img[px + 1] = img[px + 2] = (unsigned char)(255.0 * ((magnitude - min) / range));
         }
     }
 }
 
+void fftToMagnitudeImg(my_complex **com, unsigned char *img, uint32_t N)
+{
+    uint32_t px, x, y, cnt;
+    double magnitude, val, amin, range;
+    unsigned char tmp;
+    range = 0.0;
+    cnt = 0;
+    minRange(&amin, &range, com, N);
+    for (y = 0; y < N; ++y)
+    {
+        for (x = 0; x < N; ++x)
+        {
+            px = (y * N + x) * 3;
+            magnitude = sqrt(com[y][x].r *com[y][x].r + com[y][x].i *com[y][x].i);
+            val = ((magnitude - amin) / range);
+                        
+            val = 3.32192809489 * log10(1.0 + val);
+            //val = -magnitude * (magnitude - 2);
+            //val = magnitude;
+            
+            val = 255000.0 * val;
+            cnt = val < 0.1 ? cnt + 1 : cnt;
+            tmp = val > 255.0 ? 255 : val; 
+
+            img[px] = tmp;
+            img[px + 1] = tmp;
+            img[px + 2] = tmp;
+        }
+    }
+    printf("\nCnt: %u / %u\n", cnt, N * N);
+}
+
+void cpPixel(uint32_t px, uint32_t px2, unsigned char *in, unsigned char *out)
+{
+    uint32_t p = px * 3;
+    uint32_t p2 = px2 * 3;
+    out[p] = in[p2];
+    out[p + 1] = in[p2 + 1];
+    out[p + 2] = in[p2 + 2];
+}
+
 void fftShift(unsigned char *in, unsigned char *out, uint32_t N)
 {
-    uint32_t n2 = (N / 2) * 3;
-    uint32_t n4 = (N / 4) * 3;
-    uint32_t _3n4 = n2 + n4;
-    for (uint32_t i = 0; i < n4; ++i)
+    uint32_t x, y, n2, px1, px2;
+    n2 = N / 2;
+    for (y = 0; y < n2; ++y)
     {
-        out[i + _3n4] = in[i];
+        for (x = 0; x < n2; ++x)
+        {
+            px1 = y * N + x;
+            px2 = (y + n2) * N + (x + n2);
+            cpPixel(px1, px2, in, out);
+            cpPixel(px2, px1, in, out);
+        }
     }
-    for (uint32_t i = n4; i < n2; ++i)
+    for (y = 0; y < n2; ++y)
     {
-        out[i + n4] = in[i];
+        for (x = n2; x < N; ++x)
+        {
+            px1 = y * N + x;
+            px2 = (y + n2) * N + (x - n2);
+            cpPixel(px1, px2, in, out);
+            cpPixel(px2, px1, in, out);
+        }
     }
 }
 

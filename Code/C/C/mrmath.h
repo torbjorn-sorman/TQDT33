@@ -35,10 +35,6 @@ static const uint32_t revTbl256[] =
 };
 
 #define reverseBits(X,L) (((revTbl256[X & 0xff] << 24) | (revTbl256[(X >> 8) & 0xff] << 16) | (revTbl256[(X >> 16) & 0xff] << 8) | (revTbl256[(X >> 24) & 0xff])) >> L)
-#define C_MUL(R,A,B) R.r = A.r * B.r + A.i * B.i; R.i = A.r * B.i + A.i * B.r
-#define C_MUL_ADD(R,A,B,C) R.r = C.r + A.r * B.r + A.i * B.i; R.i = C.i + A.r * B.i + A.i * B.r
-#define C_ABS(A) sqrt(A.r * A.r + A.i * A.i)
-#define C_SINCOS(C,A) C.i = sin(A); C.r = cos(A)
 
 uint32_t reverseBitsLowMem(uint32_t x, uint32_t l);
 int log2_32(uint32_t value);
