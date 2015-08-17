@@ -21,6 +21,18 @@
     <ClCompile Include="kiss_fft.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="mrfft.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="mrmath.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="mrimage.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="mrtest.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="kiss_fft.h">
@@ -30,6 +42,18 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="_kiss_fft_guts.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="mrfft.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="mrmath.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="mrimage.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="mrtest.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

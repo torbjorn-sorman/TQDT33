@@ -80,10 +80,18 @@
   <ItemGroup>
     <ClCompile Include="kiss_fft.c" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="mrfft.cpp" />
+    <ClCompile Include="mrimage.cpp" />
+    <ClCompile Include="mrmath.cpp" />
+    <ClCompile Include="mrtest.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="kissfft.hh" />
     <ClInclude Include="kiss_fft.h" />
+    <ClInclude Include="mrfft.h" />
+    <ClInclude Include="mrimage.h" />
+    <ClInclude Include="mrmath.h" />
+    <ClInclude Include="mrtest.h" />
     <ClInclude Include="_kiss_fft_guts.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
