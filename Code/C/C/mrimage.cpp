@@ -3,6 +3,9 @@
 
 #include "mrimage.h"
 
+/* These are not written for performance, only visualizations and conversions.
+ */
+
 void imgToComplex(unsigned char *img, my_complex **com, uint32_t N)
 {
     float r, g, b, intensity;
@@ -39,30 +42,12 @@ void minRange(double *m, double *r, my_complex **com, uint32_t N)
     *m = mi;
     *r = ma - mi;
 }
-/*
-void realToImg(my_complex **com, unsigned char *img, uint32_t N)
-{
-    uint32_t px;
-    double vmin, range;
-    minRange(&vmin, &range, com, N);
-    printf("min: %f, range: %f\n", vmin, range);
-    for (uint32_t y = 0; y < N; ++y)
-    {
-        for (uint32_t x = 0; x < N; ++x)
-        {
-            px = y * N * 3 + x * 3;
-            img[px] = img[px + 1] = img[px + 2] = (unsigned char)(255.0 * com[y][x].r);
-        }
-    }
-}
-*/
 
 void fftToImg(my_complex **com, unsigned char *img, uint32_t N)
 {
     uint32_t px;
     double magnitude, min, range;
     minRange(&min, &range, com, N);
-    //printf("Min: %f, Range: %f\n", min, range);
     for (uint32_t y = 0; y < N; ++y)
     {
         for (uint32_t x = 0; x < N; ++x)
@@ -76,11 +61,10 @@ void fftToImg(my_complex **com, unsigned char *img, uint32_t N)
 
 void fftToMagnitudeImg(my_complex **com, unsigned char *img, uint32_t N)
 {
-    uint32_t px, x, y, cnt;
+    uint32_t px, x, y;
     double magnitude, val, amin, range;
     unsigned char tmp;
     range = 0.0;
-    cnt = 0;
     minRange(&amin, &range, com, N);
     for (y = 0; y < N; ++y)
     {
@@ -88,22 +72,18 @@ void fftToMagnitudeImg(my_complex **com, unsigned char *img, uint32_t N)
         {
             px = (y * N + x) * 3;
             magnitude = sqrt(com[y][x].r *com[y][x].r + com[y][x].i *com[y][x].i);
+            /* Value will be [0.0 : 1.0] */
             val = ((magnitude - amin) / range);
-                        
-            val = 3.32192809489 * log10(1.0 + val);
-            //val = -magnitude * (magnitude - 2);
-            //val = magnitude;
-            
-            val = 255000.0 * val;
-            cnt = val < 0.1 ? cnt + 1 : cnt;
-            tmp = val > 255.0 ? 255 : val; 
-
+            /* For visibility, values need to be scaled, might need refinement. 
+             * For now atan and a relative high scalar works. 
+             */
+            val = (atan(val * 1500.0) / (M_PI / 2)) * 255.0;            
+            tmp = val > 255.0 ? 255 : val;
             img[px] = tmp;
             img[px + 1] = tmp;
             img[px + 2] = tmp;
         }
     }
-    printf("\nCnt: %u / %u\n", cnt, N * N);
 }
 
 void cpPixel(uint32_t px, uint32_t px2, unsigned char *in, unsigned char *out)

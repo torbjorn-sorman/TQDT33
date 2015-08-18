@@ -5,8 +5,6 @@
 #include "mrfft.h"
 #include "mrimage.h"
 
-#define DBG_PRINT
-
 int run_simpleTest(uint32_t N)
 {
     uint32_t i;
@@ -14,20 +12,13 @@ int run_simpleTest(uint32_t N)
     my_complex *mr_out = (my_complex *)malloc(sizeof(my_complex) * N);
     my_complex *re_out = (my_complex *)malloc(sizeof(my_complex) * N);
     double margin = 0.00001;
-    // constant
     for (i = 0; i < N; ++i)
     {
         in[i].r = 0.5;//sin(M_2_PI * (((float)i) / N));
         in[i].i = 0.f;
-        //printf("%f\n", in[i].r);
     }
-    printf("\n");
     fft_ref(FORWARD_FFT, in, re_out, N);
     mrfft(FORWARD_FFT, in, mr_out, N);
-    for (i = 0; i < N; ++i)
-    {
-        printf("{%f, %f} {%f, %f}\n", mr_out[i].r, mr_out[i].i, re_out[i].r, re_out[i].i);
-    }
     for (i = 0; i < N; ++i)
     {
         if (abs(re_out[i].r - mr_out[i].r) > margin || abs(re_out[i].i - mr_out[i].i) > margin)
@@ -60,26 +51,36 @@ double run_test(void(*fn)(int, my_complex*, my_complex*, uint32_t), uint32_t N)
         QueryPerformanceCounter(&tStop);
         m = min(m, (double)(tStop.QuadPart - tStart.QuadPart) * 1000.0 / (float)freq.QuadPart);
     }
-#ifdef DBG_PRINT
-    for (i = 0; i < N; ++i)
-    {
-        printf("{%.2f,\t%.2f}\n", out[i].r, out[i].i);
-    }
-#endif
     return m;
 }
 
-double run_2dtest(void(*fn)(int, my_complex*, my_complex*, uint32_t), my_complex **in, uint32_t N)
+double run_2dtest(void(*fn)(int, my_complex*, my_complex*, uint32_t), uint32_t N)
 {
+    int x, y;
     LARGE_INTEGER freq, tStart, tStop;
-    double m = DBL_MAX;
+    double m, tmp;
+    char filename[13];
+    unsigned char *image;
+    my_complex **cxImage;
+    uint32_t i;
+
+    cxImage = (my_complex **)malloc(sizeof(my_complex) * N);
+    for (i = 0; i < N; ++i)
+    {
+        cxImage[i] = (my_complex *)malloc(sizeof(my_complex) * N);
+    }    
+    sprintf_s(filename, 13, "lena_%u.ppm", N);
+    image = readppm(filename, &x, &y);        
+    m = DBL_MAX;
     QueryPerformanceFrequency(&freq);
     for (int i = 0; i < 10; ++i)
     {
+        imgToComplex(image, cxImage, N);
         QueryPerformanceCounter(&tStart);
-        mrfft2d(FORWARD_FFT, fn, in, N);
+        mrfft2d(FORWARD_FFT, fn, cxImage, N);
         QueryPerformanceCounter(&tStop);
-        m = min(m, (double)(tStop.QuadPart - tStart.QuadPart) * 1000.0 / (float)freq.QuadPart);
+        tmp = (double)(tStop.QuadPart - tStart.QuadPart) * 1000.0 / (float)freq.QuadPart;
+        m = tmp < m ? tmp : m;
     }
     return (double)(tStop.QuadPart - tStart.QuadPart) * 1000.0 / (float)freq.QuadPart;
 }
@@ -98,23 +99,8 @@ int run_fbtest(void(*fn)(int, my_complex*, my_complex*, uint32_t), uint32_t N)
         in[i].i = 0.f;
     }
     in[1].r = reference[1] = 1.f;
-#ifdef DBG_PRINT
-    printf("\nInitial:\n");
-    for (i = 0; i < N; ++i)
-        printf("{ %f,\t%fi }\n", in[i].r, in[i].i);
-#endif
     fn(FORWARD_FFT, in, out, N);
-#ifdef DBG_PRINT
-    printf("\nFFT:\n");
-    for (i = 0; i < N; ++i)
-        printf("{ %f,\t%fi }\n", out[i].r, out[i].i);
-#endif
     fn(INVERSE_FFT, out, in, N);
-#ifdef DBG_PRINT
-    printf("\nInverse FFT:\n");
-    for (i = 0; i < N; ++i)
-        printf("{ %f,\t%fi }\n", in[i].r, in[i].i);
-#endif
     for (i = 0; i < N; ++i)
     {
         if (abs(reference[i] - in[i].r) > margin)
@@ -145,41 +131,8 @@ int run_fft2dinvtest(void(*fn)(int, my_complex*, my_complex*, uint32_t), uint32_
         }
     }
     seq2d[1][1].r = ref[1][1].r = 1.f;
-#ifdef DBG_PRINT
-    for (y = 0; y < N; ++y)
-    {
-        for (x = 0; x < N; ++x)
-        {
-            printf(format, seq2d[y][x].r, seq2d[y][x].i);
-        }
-        printf("\n");
-    }
-    printf("\n");
-#endif
     mrfft2d(FORWARD_FFT, fn, seq2d, N);
-#ifdef DBG_PRINT
-    for (y = 0; y < N; ++y)
-    {
-        for (x = 0; x < N; ++x)
-        {
-            printf(format, seq2d[y][x].r, seq2d[y][x].i);
-        }
-        printf("\n");
-    }
-    printf("\n");
-#endif
     mrfft2d(INVERSE_FFT, fn, seq2d, N);
-#ifdef DBG_PRINT
-    for (y = 0; y < N; ++y)
-    {
-        for (x = 0; x < N; ++x)
-        {
-            printf(format, seq2d[y][x].r, seq2d[y][x].i);
-        }
-        printf("\n");
-    }
-    printf("\n");
-#endif
     margin = 0.00001;
     for (y = 0; y < N; ++y)
     {

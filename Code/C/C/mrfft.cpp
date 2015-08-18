@@ -1,6 +1,6 @@
 #include "mrfft.h"
 
-/* Naive Fast Fourier Transform */
+/* Naive Fast Fourier Transform, simple single core CPU-tests */
 void mrfft(int dir, my_complex *x, my_complex *X, uint32_t N)
 {
     const uint32_t depth = log2_32(N);
@@ -66,8 +66,8 @@ void mrfft(int dir, my_complex *x, my_complex *X, uint32_t N)
             X[p].i = tmp[n].i;
         }
     }
-    //free(tmp);
-    //free(W);
+    free(tmp);
+    free(W);
 }
 
 void mrfft2d(int dir, void(*fn)(int, my_complex*, my_complex*, uint32_t), my_complex **seq2d, uint32_t N)
